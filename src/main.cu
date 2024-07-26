@@ -1,11 +1,18 @@
 #include <iostream>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+
 #include <time.h>
 #include "sphere.hpp"
 #include "rt.hpp"
 #include "hittable.hpp"
 #include "hittablelist.hpp"
+#include "stb_image_write.h"
+
 
 using Color = jtx::Vec3f;
+using RGB8 = jtx::Vec3<uint8_t>;
+
+void savePNG(const char *path, const RGB8 *fb, int width, int height) {}
 
 
 #define CHECK_CUDA(val) check_cuda( (val), #val, __FILE__, __LINE__)
@@ -41,7 +48,7 @@ __device__ jtx::Vec3f rayColor(const jtx::Rayf &r, Hittable **world) {
     return jtx::lerp(jtx::Vec3f{1.0f, 1.0f, 1.0f}, jtx::Vec3f{0.5f, 0.7f, 1.0f}, t);
 }
 
-__global__ void render(Color *fb,
+__global__ void render(RGB8 *fb,
                        int max_x,
                        int max_y,
                        jtx::Vec3f lowerLeft,
@@ -56,7 +63,10 @@ __global__ void render(Color *fb,
     float u = float(i) / float(max_x);
     float v = float(j) / float(max_y);
     jtx::Rayf r(origin, lowerLeft + u * horizontal + v * vertical);
-    fb[pixel_index] = rayColor(r, world);
+    Color c = rayColor(r, world);
+    fb[pixel_index].x = uint8_t(255.99 * c.x);
+    fb[pixel_index].y = uint8_t(255.99 * c.y);
+    fb[pixel_index].z = uint8_t(255.99 * c.z);
 }
 
 int main() {
@@ -69,9 +79,9 @@ int main() {
     std::cerr << "in " << tx << "x" << ty << " blocks.\n";
 
     int numPixels = nx * ny;
-    auto fb_size = numPixels * sizeof(Color);
+    auto fb_size = numPixels * sizeof(RGB8);
 
-    Color *fb;
+    RGB8 *fb;
     CHECK_CUDA(cudaMallocManaged((void **) &fb, fb_size));
 
     Hittable **d_list;
@@ -98,16 +108,15 @@ int main() {
     double timer_seconds = ((double) (stop - start)) / CLOCKS_PER_SEC;
     std::cerr << "Time: " << timer_seconds << " seconds\n";
 
-    std::cout << "P3\n" << nx << " " << ny << "\n255\n";
-    for (int j = ny - 1; j >= 0; j--) {
-        for (int i = 0; i < nx; i++) {
-            size_t pixel_index = j * nx + i;
-            int ir = int(255.99*fb[pixel_index].x);
-            int ig = int(255.99*fb[pixel_index].y);
-            int ib = int(255.99*fb[pixel_index].z);
-            std::cout << ir << " " << ig << " " << ib << "\n";
-        }
-    }
+    stbi__flip_vertically_on_write = 1;
+    stbi_write_png("output.png", nx, ny, 3, fb, nx * 3);
+//    std::cout << "P3\n" << nx << " " << ny << "\n255\n";
+//    for (int j = ny - 1; j >= 0; j--) {
+//        for (int i = 0; i < nx; i++) {
+//            size_t pixel_index = j * nx + i;
+//            std::cout << fb[pixel_index].x << " " << fb[pixel_index].y << " " << fb[pixel_index].z << "\n";
+//        }
+//    }
 
     CHECK_CUDA(cudaDeviceSynchronize());
     freeWorld<<<1,1>>>(d_list,d_world);
