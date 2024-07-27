@@ -2,11 +2,13 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 
 #include <time.h>
+#include <curand_kernel.h>
 #include "sphere.hpp"
 #include "rt.hpp"
 #include "hittable.hpp"
 #include "hittablelist.hpp"
 #include "stb_image_write.h"
+#include "camera.hpp"
 
 
 using Color = jtx::Vec3f;
@@ -48,25 +50,35 @@ __device__ jtx::Vec3f rayColor(const jtx::Rayf &r, Hittable **world) {
     return jtx::lerp(jtx::Vec3f{1.0f, 1.0f, 1.0f}, jtx::Vec3f{0.5f, 0.7f, 1.0f}, t);
 }
 
+__global__ void renderInit(int maxX, int maxY, curandState *randState) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    int j = threadIdx.y + blockIdx.y * blockDim.y;
+    if((i >= maxX) || (j >= maxY)) return;
+    int pixelIndex = j * maxX + i;
+    curand_init(1984, pixelIndex, 0, &randState[pixelIndex]);
+}
+
 __global__ void render(RGB8 *fb,
-                       int max_x,
-                       int max_y,
+                       int maxX,
+                       int maxY,
                        jtx::Vec3f lowerLeft,
                        jtx::Vec3f horizontal,
                        jtx::Vec3f vertical,
                        jtx::Vec3f origin,
-                       Hittable **world) {
+                       Hittable **world,
+                       curandState *randState) {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     int j = threadIdx.y + blockIdx.y * blockDim.y;
-    if((i >= max_x) || (j >= max_y)) return;
-    int pixel_index = j * max_x + i;
-    float u = float(i) / float(max_x);
-    float v = float(j) / float(max_y);
+    if((i >= maxX) || (j >= maxY)) return;
+    int pixel_index = j * maxX + i;
+    curandState localRandState = randState[pixel_index];
+    float u = float(i) / float(maxX);
+    float v = float(j) / float(maxY);
     jtx::Rayf r(origin, lowerLeft + u * horizontal + v * vertical);
-    Color c = rayColor(r, world);
-    fb[pixel_index].x = uint8_t(255.99 * c.x);
-    fb[pixel_index].y = uint8_t(255.99 * c.y);
-    fb[pixel_index].z = uint8_t(255.99 * c.z);
+    Color color = rayColor(r, world);
+    fb[pixel_index].x = uint8_t(256 * jtx::clamp(color.r, 0.0f, 0.999f));
+    fb[pixel_index].y = uint8_t(256 * jtx::clamp(color.g, 0.0f, 0.999f));
+    fb[pixel_index].z = uint8_t(256 * jtx::clamp(color.b, 0.0f, 0.999f));
 }
 
 int main() {
@@ -88,20 +100,26 @@ int main() {
     CHECK_CUDA(cudaMalloc((void **) &d_list, 2 * sizeof(Hittable *)));
     Hittable **d_world;
     CHECK_CUDA(cudaMalloc((void **) &d_world, sizeof(Hittable *)));
+    curandState *d_randState;
+    CHECK_CUDA(cudaMalloc((void **) &d_randState, numPixels * sizeof(curandState)));
+
     createWorld<<<1, 1>>>(d_list, d_world);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
 
-    clock_t start, stop;
-    start = clock();
     dim3 blocks(nx / tx + 1, ny / ty + 1);
     dim3 threads(tx, ty);
+    renderInit<<<blocks, threads>>>(nx, ny, d_randState);
+
+    clock_t start, stop;
+    start = clock();
     render<<<blocks, threads>>>(fb, nx, ny,
                                 jtx::Vec3f(-2.0, -1.0, -1.0),
                                 jtx::Vec3f(4.0, 0.0, 0.0),
                                 jtx::Vec3f(0.0, 2.0, 0.0),
                                 jtx::Vec3f(0.0, 0.0, 0.0),
-                                d_world);
+                                d_world,
+                                d_randState);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
     stop = clock();
@@ -110,13 +128,6 @@ int main() {
 
     stbi__flip_vertically_on_write = 1;
     stbi_write_png("output.png", nx, ny, 3, fb, nx * 3);
-//    std::cout << "P3\n" << nx << " " << ny << "\n255\n";
-//    for (int j = ny - 1; j >= 0; j--) {
-//        for (int i = 0; i < nx; i++) {
-//            size_t pixel_index = j * nx + i;
-//            std::cout << fb[pixel_index].x << " " << fb[pixel_index].y << " " << fb[pixel_index].z << "\n";
-//        }
-//    }
 
     CHECK_CUDA(cudaDeviceSynchronize());
     freeWorld<<<1,1>>>(d_list,d_world);

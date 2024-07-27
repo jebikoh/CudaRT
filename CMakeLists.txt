@@ -13,6 +13,7 @@ add_executable(CudaRT src/main.cu
         src/interval.hpp
         src/sphere.hpp
         src/hittablelist.hpp
+        src/camera.hpp
 )
 
 set(CUDA_ARCH "75" CACHE STRING "CUDA architecture (e.g. 75 for SM 7.5)")
