@@ -2,10 +2,13 @@
 
 #include "rt.hpp"
 
+class Material;
+
 struct HitRecord {
     jtx::Point3f p;
     jtx::Vec3f normal;
     float t;
+    Material *mat;
     bool frontFace;
 
     __device__ void setFaceNormal(const jtx::Rayf &r, const jtx::Vec3f &outwardNormal) {

@@ -15,7 +15,7 @@ public:
 
     [[nodiscard]] __device__ bool surrounds(float x) const { return x > min && x < max; }
 
-    static const Interval empty, universe;
+    __device__ float clamp(float x) const { return fminf(fmaxf(x, min), max); }
 };
 
 //const Interval Interval::empty = Interval(+jtx::INFINITY_F, jtx::NEG_INFINITY_F);
