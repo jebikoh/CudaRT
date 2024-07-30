@@ -60,10 +60,11 @@ __global__ void createWorld(Hittable **d_list,
                             int height
 ) {
     if (threadIdx.x == 0 && blockIdx.x == 0) {
-        d_list[1] = new Sphere(jtx::Vec3f(0, -100.5f, -1), 100, new Lambertian(jtx::Vec3f(0.8f, 0.8f, 0.0f)));
-        d_list[0] = new Sphere(jtx::Vec3f(0, 0, -1.2), 0.5f, new Lambertian(jtx::Vec3f(0.1f, 0.2f, 0.5f)));
-        d_list[3] = new Sphere(jtx::Vec3f(-1, 0, -1), 0.5f, new Dielectric(1.50));
-        d_list[2] = new Sphere(jtx::Vec3f(1, 0, -1), 0.5f, new Metal(jtx::Vec3f(0.8f, 0.6f, 0.2f), 1.0f));
+        d_list[0] = new Sphere(jtx::Vec3f(0, -100.5f, -1), 100, new Lambertian(jtx::Vec3f(0.8f, 0.8f, 0.0f)));
+        d_list[1] = new Sphere(jtx::Vec3f(0, 0, -1.2), 0.5f, new Lambertian(jtx::Vec3f(0.1f, 0.2f, 0.5f)));
+        d_list[2] = new Sphere(jtx::Vec3f(-1, 0, -1), 0.5f, new Dielectric(1.50));
+        d_list[3] = new Sphere(jtx::Vec3f(-1, 0, -1), 0.4f, new Dielectric(1.00 / 1.50));
+        d_list[4] = new Sphere(jtx::Vec3f(1, 0, -1), 0.5f, new Metal(jtx::Vec3f(0.8f, 0.6f, 0.2f), 1.0f));
         *d_world = new HittableList(d_list, numHittables);
         *d_camera = new Camera(width, height);
     }
@@ -127,7 +128,7 @@ int main() {
     RGB8 *fb;
     CHECK_CUDA(cudaMallocManaged((void **) &fb, fb_size));
 
-    const int numHittables = 4;
+    const int numHittables = 5;
 
     Hittable **d_list;
     CHECK_CUDA(cudaMalloc((void **) &d_list, numHittables * sizeof(Hittable *)));
@@ -163,8 +164,7 @@ int main() {
     double timer_seconds = ((double) (stop - start)) / CLOCKS_PER_SEC;
     std::cerr << "Time: " << timer_seconds << " seconds\n";
 
-//    stbi_write_png("output_inplerp.png", nx, ny, 3, fb, nx * 3);
-    stbi_write_png("output_jtxlerp.png", nx, ny, 3, fb, nx * 3);
+    stbi_write_png("output.png", nx, ny, 3, fb, nx * 3);
 
 
     CHECK_CUDA(cudaDeviceSynchronize());
