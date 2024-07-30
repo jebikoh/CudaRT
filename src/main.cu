@@ -60,13 +60,15 @@ __global__ void createWorld(Hittable **d_list,
                             int height
 ) {
     if (threadIdx.x == 0 && blockIdx.x == 0) {
-        d_list[0] = new Sphere(jtx::Vec3f(0, -100.5f, -1), 100, new Lambertian(jtx::Vec3f(0.8f, 0.8f, 0.0f)));
-        d_list[1] = new Sphere(jtx::Vec3f(0, 0, -1.2), 0.5f, new Lambertian(jtx::Vec3f(0.1f, 0.2f, 0.5f)));
-        d_list[2] = new Sphere(jtx::Vec3f(-1, 0, -1), 0.5f, new Dielectric(1.50));
-        d_list[3] = new Sphere(jtx::Vec3f(-1, 0, -1), 0.4f, new Dielectric(1.00 / 1.50));
+        auto R = cosf(jtx::PI_F / 4);
+        d_list[0] = new Sphere(jtx::Vec3f(0, -100.5f, -1), 100.0f, new Lambertian(jtx::Vec3f(0.8f, 0.8f, 0.0f)));
+        d_list[1] = new Sphere(jtx::Vec3f(0, 0, -1.2f), 0.5f, new Lambertian(jtx::Vec3f(0.1f, 0.2f, 0.5f)));
+        d_list[2] = new Sphere(jtx::Vec3f(-1, 0, -1), 0.5f, new Dielectric(1.50f));
+        d_list[3] = new Sphere(jtx::Vec3f(-1, 0, -1), 0.4f, new Dielectric(1.00f / 1.50f));
         d_list[4] = new Sphere(jtx::Vec3f(1, 0, -1), 0.5f, new Metal(jtx::Vec3f(0.8f, 0.6f, 0.2f), 1.0f));
         *d_world = new HittableList(d_list, numHittables);
-        *d_camera = new Camera(width, height);
+
+        *d_camera = new Camera(width, height, 20.0f, {-2, 2, 1}, {0, 0, -1}, {0, 1, 0}, 10.0f, 3.4f);
     }
 }
 
