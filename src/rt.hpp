@@ -11,7 +11,7 @@
 __device__ jtx::Vec3f randomInUnitSphere(curandState *localRandState) {
     while (true) {
         auto p = 2.0f * RANDVEC3 - jtx::Vec3f(1, 1, 1);
-        if (p.lenSqr() < 1.0f) return p;
+        if (p.lenSqr() < 1.0f) return p.normalize();
     }
 }
 

@@ -37,15 +37,16 @@ __device__ jtx::Vec3f rayColor(const jtx::Rayf &r, Hittable **world, curandState
             jtx::Rayf scattered;
             jtx::Vec3f attenuation;
 
-            if (rec.mat->scatter(r, rec, attenuation, scattered, localRandState)) {
+            if (rec.mat->scatter(curRay, rec, attenuation, scattered, localRandState)) {
                 curAttenuation *= attenuation;
                 curRay = scattered;
             } else {
                 return {0.0f, 0.0f, 0.0f};
             }
         } else {
-            float t = 0.5f * (jtx::normalize(r.dir).y + 1.0f);
-            return curAttenuation * jtx::lerp(jtx::Vec3f{1.0f, 1.0f, 1.0f}, jtx::Vec3f{0.5f, 0.7f, 1.0f}, t);
+            float t = 0.8f * (jtx::normalize(curRay.dir).y + 1.0f);
+            jtx::Vec3f c = jtx::lerp(jtx::Vec3f{1.0f, 1.0f, 1.0f}, jtx::Vec3f{0.5f, 0.7f, 1.0f}, t);
+            return curAttenuation * c;
         }
     }
     return {0.0f, 0.0f, 0.0f};
@@ -61,7 +62,7 @@ __global__ void createWorld(Hittable **d_list,
     if (threadIdx.x == 0 && blockIdx.x == 0) {
         d_list[1] = new Sphere(jtx::Vec3f(0, -100.5f, -1), 100, new Lambertian(jtx::Vec3f(0.8f, 0.8f, 0.0f)));
         d_list[0] = new Sphere(jtx::Vec3f(0, 0, -1.2), 0.5f, new Lambertian(jtx::Vec3f(0.1f, 0.2f, 0.5f)));
-        d_list[3] = new Sphere(jtx::Vec3f(-1, 0, -1), 0.5f, new Dielectric(1.0f / 1.33f));
+        d_list[3] = new Sphere(jtx::Vec3f(-1, 0, -1), 0.5f, new Dielectric(1.50));
         d_list[2] = new Sphere(jtx::Vec3f(1, 0, -1), 0.5f, new Metal(jtx::Vec3f(0.8f, 0.6f, 0.2f), 1.0f));
         *d_world = new HittableList(d_list, numHittables);
         *d_camera = new Camera(width, height);
@@ -104,9 +105,9 @@ __global__ void render(RGB8 *fb,
     }
     randState[pixel_index] = localRandState;
     color /= float(spp);
-    fb[pixel_index].x = uint8_t(256 * jtx::clamp(::sqrtf(color.r), 0.0f, 0.999f));
-    fb[pixel_index].y = uint8_t(256 * jtx::clamp(::sqrtf(color.g), 0.0f, 0.999f));
-    fb[pixel_index].z = uint8_t(256 * jtx::clamp(::sqrtf(color.b), 0.0f, 0.999f));
+    fb[pixel_index].x = uint8_t(255.999 * jtx::clamp(::sqrtf(color.r), 0.0f, 0.999f));
+    fb[pixel_index].y = uint8_t(255.999 * jtx::clamp(::sqrtf(color.g), 0.0f, 0.999f));
+    fb[pixel_index].z = uint8_t(255.999 * jtx::clamp(::sqrtf(color.b), 0.0f, 0.999f));
 }
 
 int main() {
@@ -162,7 +163,8 @@ int main() {
     double timer_seconds = ((double) (stop - start)) / CLOCKS_PER_SEC;
     std::cerr << "Time: " << timer_seconds << " seconds\n";
 
-    stbi_write_png("output.png", nx, ny, 3, fb, nx * 3);
+//    stbi_write_png("output_inplerp.png", nx, ny, 3, fb, nx * 3);
+    stbi_write_png("output_jtxlerp.png", nx, ny, 3, fb, nx * 3);
 
 
     CHECK_CUDA(cudaDeviceSynchronize());

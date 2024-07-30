@@ -76,22 +76,13 @@ public:
             jtx::Vec3f &attenuation,
             jtx::Rayf &scattered,
             curandState *localRandState) const override {
-        attenuation = jtx::Vec3f(1.0, 1.0, 1.0);
-        float ri   = rec.frontFace ? (1.0f / refIdx) : refIdx;
+        attenuation = jtx::Vec3f(1.0f, 1.0f, 1.0f);
+        float ri = rec.frontFace ? (1.0f / refIdx) : refIdx;
 
-        auto unitDir    = normalize(ray.dir);
-        float cosTheta = ::fminf(dot(-unitDir, rec.normal), 1.0f);
-        float sinTheta = ::sqrtf(1.0f - cosTheta * cosTheta);
+        jtx::Vec3f unit_direction = jtx::normalize(ray.dir);
+        jtx::Vec3f refracted = jtx::refract(unit_direction, rec.normal, ri);
 
-        jtx::Vec3f direction;
-
-        if ((ri * sinTheta > 1.0f) || reflectance(cosTheta, ri) > curand_uniform(localRandState)) {
-            direction = jtx::reflect(unitDir, rec.normal);
-        } else {
-            direction = jtx::refract(unitDir, rec.normal, ri);
-        }
-
-        scattered = jtx::Rayf(rec.p, direction);
+        scattered = jtx::Rayf(rec.p, refracted);
         return true;
     }
 };
