@@ -8,6 +8,15 @@
 
 #define RANDVEC3 jtx::Vec3f(curand_uniform(localRandState),curand_uniform(localRandState),curand_uniform(localRandState))
 
+__device__ jtx::Vec3f randVec3f(float min, float max, curandState *localRandState) {
+    auto v = RANDVEC3;
+    return v * (max - min) + min;
+}
+
+__device__ jtx::Vec3f randVec3f(curandState *localRandState) {
+    return RANDVEC3;
+}
+
 __device__ jtx::Vec3f randomInUnitSphere(curandState *localRandState) {
     while (true) {
         auto p = 2.0f * RANDVEC3 - jtx::Vec3f(1, 1, 1);

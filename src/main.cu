@@ -16,6 +16,8 @@
 using Color = jtx::Vec3f;
 using RGB8 = jtx::Vec3<uint8_t>;
 
+__device__ int d_nh;
+
 #define CHECK_CUDA(val) check_cuda( (val), #val, __FILE__, __LINE__)
 
 void check_cuda(cudaError_t result, char const *const func, const char *const file, int const line) {
@@ -52,28 +54,73 @@ __device__ jtx::Vec3f rayColor(const jtx::Rayf &r, Hittable **world, curandState
     return {0.0f, 0.0f, 0.0f};
 }
 
-__global__ void createWorld(Hittable **d_list,
-                            int numHittables,
-                            Hittable **d_world,
-                            Camera **d_camera,
-                            int width,
-                            int height
-) {
+__global__ void randInit(curandState *randState) {
     if (threadIdx.x == 0 && blockIdx.x == 0) {
-        auto R = cosf(jtx::PI_F / 4);
-        d_list[0] = new Sphere(jtx::Vec3f(0, -100.5f, -1), 100.0f, new Lambertian(jtx::Vec3f(0.8f, 0.8f, 0.0f)));
-        d_list[1] = new Sphere(jtx::Vec3f(0, 0, -1.2f), 0.5f, new Lambertian(jtx::Vec3f(0.1f, 0.2f, 0.5f)));
-        d_list[2] = new Sphere(jtx::Vec3f(-1, 0, -1), 0.5f, new Dielectric(1.50f));
-        d_list[3] = new Sphere(jtx::Vec3f(-1, 0, -1), 0.4f, new Dielectric(1.00f / 1.50f));
-        d_list[4] = new Sphere(jtx::Vec3f(1, 0, -1), 0.5f, new Metal(jtx::Vec3f(0.8f, 0.6f, 0.2f), 1.0f));
-        *d_world = new HittableList(d_list, numHittables);
-
-        *d_camera = new Camera(width, height, 20.0f, {-2, 2, 1}, {0, 0, -1}, {0, 1, 0}, 10.0f, 3.4f);
+        curand_init(1984, 0, 0, randState);
     }
 }
 
-__global__ void freeWorld(Hittable **d_list, int numHittables, Hittable **d_world, Camera **d_camera) {
-    for (int i = 0; i < numHittables; ++i) {
+__global__ void createWorld(Hittable **d_list,
+                            Hittable **d_world,
+                            Camera **d_camera,
+                            int width,
+                            int height,
+                            curandState *randState
+) {
+    if (threadIdx.x == 0 && blockIdx.x == 0) {
+        curandState localRandState = *randState;
+
+        // Ground
+        int nh = 0;
+        d_list[nh++] = new Sphere(jtx::Vec3f{0, -1000, 0}, 1000, new Lambertian(jtx::Vec3f{0.5, 0.5, 0.5}));
+        // Random spheres
+        for (int a = -11; a < 11; ++a) {
+            for (int b = -11; b < 11; ++b) {
+                float chooseMat = curand_uniform(&localRandState);
+                jtx::Point3f center(float(a) + 0.9f * curand_uniform(&localRandState), 0.2f,
+                                    float(b) + 0.9f * curand_uniform(&localRandState));
+                if ((center - jtx::Point3f{4, 0.2f, 0}).len() > 0.9f) {
+                    if (chooseMat < 0.8) {
+                        // Diffuse
+                        auto albedo = randVec3f(&localRandState) * randVec3f(&localRandState);
+                        d_list[nh++] = new Sphere(center, 0.2f, new Lambertian(albedo));
+                    } else if (chooseMat < 0.95) {
+                        // Metal
+                        auto albedo = randVec3f(0.5f, 1.0f, &localRandState);
+                        auto fuzz = curand_uniform(&localRandState) * 0.5f;
+                        d_list[nh++] = new Sphere(center, 0.2f, new Metal(albedo, fuzz));
+                    } else {
+                        // Glass
+                        d_list[nh++] = new Sphere(center, 0.2f, new Dielectric(1.5f));
+                    }
+
+                }
+            }
+        }
+
+        // Three big spheres
+        d_list[nh++] = new Sphere(jtx::Vec3f{0, 1, 0}, 1.0f, new Dielectric(1.5f));
+        d_list[nh++] = new Sphere(jtx::Vec3f{-4, 1, 0}, 1.0f, new Lambertian(jtx::Vec3f{0.4, 0.2, 0.1}));
+        d_list[nh++] = new Sphere(jtx::Vec3f{4, 1, 0}, 1.0f, new Metal(jtx::Vec3f{0.7, 0.6, 0.5}, 0.0f));
+        *randState = localRandState;
+
+        d_nh = nh;
+        *d_world = new HittableList(d_list, nh);
+
+        float vfov = 20.0f;
+        jtx::Point3f lookFrom{13, 2, 3};
+        jtx::Point3f lookAt{0, 0, 0};
+        jtx::Vec3f vup{0, 1, 0};
+
+        float defocusAngle = 0.6f;
+        float focusDist = 10.0f;
+
+        *d_camera = new Camera(width, height, vfov, lookFrom, lookAt, vup, defocusAngle, focusDist);
+    }
+}
+
+__global__ void freeWorld(Hittable **d_list, Hittable **d_world, Camera **d_camera) {
+    for (int i = 0; i < d_nh; ++i) {
         delete *(d_list + i);
     }
     delete *d_world;
@@ -127,10 +174,10 @@ int main() {
     int numPixels = nx * ny;
     auto fb_size = numPixels * sizeof(RGB8);
 
+    int numHittables = 22 * 22 + 1 + 3;
+
     RGB8 *fb;
     CHECK_CUDA(cudaMallocManaged((void **) &fb, fb_size));
-
-    const int numHittables = 5;
 
     Hittable **d_list;
     CHECK_CUDA(cudaMalloc((void **) &d_list, numHittables * sizeof(Hittable *)));
@@ -138,10 +185,13 @@ int main() {
     CHECK_CUDA(cudaMalloc((void **) &d_world, sizeof(Hittable *)));
     curandState *d_randState;
     CHECK_CUDA(cudaMalloc((void **) &d_randState, numPixels * sizeof(curandState)));
+    curandState *d_worldRandState;
+    CHECK_CUDA(cudaMalloc((void **) &d_worldRandState, sizeof(curandState)));
     Camera **d_camera;
     CHECK_CUDA(cudaMalloc((void **) &d_camera, sizeof(Camera *)));
 
-    createWorld<<<1, 1>>>(d_list, numHittables, d_world, d_camera, nx, ny);
+    randInit<<<1, 1>>>(d_worldRandState);
+    createWorld<<<1, 1>>>(d_list, d_world, d_camera, nx, ny, d_worldRandState);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
 
@@ -170,11 +220,12 @@ int main() {
 
 
     CHECK_CUDA(cudaDeviceSynchronize());
-    freeWorld<<<1, 1>>>(d_list, numHittables, d_world, d_camera);
+    freeWorld<<<1, 1>>>(d_list, d_world, d_camera);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaFree(d_camera));
     CHECK_CUDA(cudaFree(d_list));
     CHECK_CUDA(cudaFree(d_world));
     CHECK_CUDA(cudaFree(d_randState));
+    CHECK_CUDA(cudaFree(d_worldRandState));
     CHECK_CUDA(cudaFree(fb));
 }
