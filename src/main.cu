@@ -82,8 +82,9 @@ __global__ void createWorld(Hittable **d_list,
                 if ((center - jtx::Point3f{4, 0.2f, 0}).len() > 0.9f) {
                     if (chooseMat < 0.8) {
                         // Diffuse
+                        auto endCenter = center + jtx::Vec3f(0.0f, curand_uniform(&localRandState) * 0.5f, 0.0f);
                         auto albedo = randVec3f(&localRandState) * randVec3f(&localRandState);
-                        d_list[nh++] = new Sphere(center, 0.2f, new Lambertian(albedo));
+                        d_list[nh++] = new Sphere(center, endCenter, 0.2f, new Lambertian(albedo));
                     } else if (chooseMat < 0.95) {
                         // Metal
                         auto albedo = randVec3f(0.5f, 1.0f, &localRandState);
@@ -165,7 +166,7 @@ int main() {
     const int ny = 600;
     const int tx = 8;
     const int ty = 8;
-    const int spp = 100;
+    const int spp = 200;
     const int maxDepth = 50;
 
     std::cerr << "Rendering a " << nx << "x" << ny << " image ";

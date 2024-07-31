@@ -30,7 +30,7 @@ public:
             curandState *localRandState) const override {
         auto scatterDir = rec.normal + randomUnitVector(localRandState);
         if (nearZero(scatterDir)) scatterDir = rec.normal;
-        scattered = jtx::Rayf(rec.p, scatterDir);
+        scattered = jtx::Rayf(rec.p, scatterDir, ray.time);
         attenuation = albedo;
         return true;
     }
@@ -51,7 +51,7 @@ public:
             curandState *localRandState) const override {
         jtx::Vec3f reflected = jtx::reflect(ray.dir, rec.normal).normalize();
         reflected += (fuzz * randomUnitVector(localRandState));
-        scattered = jtx::Rayf(rec.p, reflected);
+        scattered = jtx::Rayf(rec.p, reflected, ray.time);
         attenuation = albedo;
         return (dot(scattered.dir, rec.normal) > 0);
     }
@@ -91,7 +91,7 @@ public:
             direction = jtx::refract(unitDir, rec.normal, ri);
         }
 
-        scattered = jtx::Rayf(rec.p, direction);
+        scattered = jtx::Rayf(rec.p, direction, ray.time);
         return true;
     }
 };

@@ -7,6 +7,7 @@
 #include "interval.hpp"
 
 #define RANDVEC3 jtx::Vec3f(curand_uniform(localRandState),curand_uniform(localRandState),curand_uniform(localRandState))
+#define RND (curand_uniform(localRandState))
 
 __device__ jtx::Vec3f randVec3f(float min, float max, curandState *localRandState) {
     auto v = RANDVEC3;

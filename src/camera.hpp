@@ -72,7 +72,8 @@ public:
         auto offset = sampleSquare(localRandState);
         auto sample = upperLeft + ((i + offset.x) * deltaU) + ((j + offset.y) * deltaV);
         auto rayOrigin = (defocusAngle <= 0) ? center : defocusDiskSample(localRandState);
-        return {rayOrigin, sample - rayOrigin};
+        auto rayTime = RND;
+        return {rayOrigin, sample - rayOrigin, rayTime};
     }
 
     __device__ jtx::Point3f defocusDiskSample(curandState *localRandState) const {
