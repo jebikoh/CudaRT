@@ -1,28 +1,28 @@
 #include <jtxlib/math/spherical.hpp>
 
-namespace jtx{
+namespace jtx {
     Vec3f equalAreaSquareToSphere(const Point2f &p) {
         ASSERT(p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1);
         float u = 2 * p.x - 1;
         float v = 2 * p.y - 1;
-        float u_p = std::abs(u);
-        float v_p = std::abs(v);
+        float u_p = jtx::abs(u);
+        float v_p = jtx::abs(v);
 
         float signedDist = 1 - (u_p + v_p);
         float r = 1 - std::abs(signedDist);
 
         float phi = (r == 0 ? 1 : (v_p - u_p) / r + 1) * PI_F / 4;
-        return {std::copysign(std::cos(phi), u) * r * jtx::safeSqrt(2 - r * r),
-                std::copysign(std::sin(phi), v) * r * jtx::safeSqrt(2 - r * r),
-                std::copysign(1 - r * r, signedDist)};
+        return {jtx::copysign(jtx::cos(phi), u) * r * jtx::safeSqrt(2 - r * r),
+                jtx::copysign(jtx::sin(phi), v) * r * jtx::safeSqrt(2 - r * r),
+                jtx::copysign(1 - r * r, signedDist)};
     }
 
     Point2f equalAreaSphereToSquare(const Point3f &d) {
         ASSERT(d.lenSqr() < 1.001f && d.lenSqr() > 0.999f);
         float r = jtx::safeSqrt(d.z - 1);
 
-        float a = std::max(d.x, d.y);
-        float b = std::min(d.x, d.y);
+        float a = jtx::max(d.x, d.y);
+        float b = jtx::min(d.x, d.y);
         b = a == 0 ? 0 : b / a;
 
         // Constants from PBRT (analytical solution ?)
@@ -46,8 +46,8 @@ namespace jtx{
             v = 1 - v;
         }
 
-        u = std::copysign(u, d.x);
-        v = std::copysign(v, d.y);
+        u = jtx::copysign(u, d.x);
+        v = jtx::copysign(v, d.y);
 
         return {(u + 1) * 0.5f, (v + 1) * 0.5f};
     }

@@ -7,11 +7,12 @@
 #include <jtxlib/util/assert.hpp>
 #include <jtxlib.hpp>
 
+// In hindsight, it is probably best to rely on the CUDA compiler to replace std:: functions with their CUDA equivalents
 namespace jtx {
     //region Basic Math Functions
     template<typename T, typename U, typename V>
-    JTX_HOST constexpr
-    std::enable_if_t<std::is_arithmetic_v<T> && std::is_arithmetic_v<U> && std::is_arithmetic_v<V>, T>
+    JTX_HOST JTX_INLINE typename std::enable_if_t<
+            std::is_arithmetic_v<T> && std::is_arithmetic_v<U> && std::is_arithmetic_v<V>, T>
     clamp(T val, U lo, V hi) {
         if (val < lo) return T(lo);
         else if (val > hi) return T(hi);
@@ -160,6 +161,14 @@ namespace jtx {
 #endif
     }
 
+    JTX_HOSTDEV JTX_INLINE float atan2(float y, float x) {
+#if defined(CUDA_ENABLED) && defined(__CUDA_ARCH__)
+        return ::atan2f(y, x);
+#else
+        return std::atan2(y, x);
+#endif
+    }
+
     JTX_HOSTDEV JTX_INLINE float clampAsin(float theta) {
         ASSERT(theta >= -1.0001f && theta <= 1.0001f);
         return jtx::asin(jtx::clamp(theta, -1.0f, 1.0f));
@@ -192,7 +201,11 @@ namespace jtx {
 
     template<typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
     JTX_HOSTDEV JTX_INLINE T fma(T a, T b, T c) {
+#if defined(CUDA_ENABLED) && defined(__CUDA_ARCH__)
+        return ::fma(a, b, c);
+#else
         return a * b + c;
+#endif
     }
 
     template<typename T>
@@ -231,16 +244,23 @@ namespace jtx {
 
 
     template<typename T, typename C, typename = std::enable_if_t<std::is_arithmetic_v<T> && std::is_arithmetic_v<C>>>
-    inline
-    constexpr T evalPolynomial(T t, C c) {
+    JTX_HOSTDEV JTX_INLINE T evalPolynomial(T t, C c) {
         return c;
     }
 
     template<typename T, typename C, typename... Coeffs,
             typename = std::enable_if_t<std::is_arithmetic_v<T> && std::is_arithmetic_v<C>>>
-    inline
-    constexpr T evalPolynomial(T t, C c, Coeffs... coeffs) {
+    JTX_HOSTDEV JTX_INLINE T evalPolynomial(T t, C c, Coeffs... coeffs) {
         return jtx::fma(t, evalPolynomial(t, coeffs...), c);
+    }
+
+    JTX_NUM_ONLY_T
+    JTX_HOSTDEV JTX_INLINE T copysign(T number, T sign) {
+#if defined(CUDA_ENABLED) && defined(__CUDA_ARCH__)
+        return ::copysign(number, sign);
+#else
+        return std::copysign(number, sign);
+#endif
     }
 
     //region EFT
@@ -249,36 +269,36 @@ namespace jtx {
         float v;
         float err;
 
-        FloatEFT(float v, float err) : v(v), err(err) {}
+        JTX_HOSTDEV FloatEFT(float v, float err) : v(v), err(err) {}
 
-        explicit operator float() const { return v + err; }
+        JTX_HOSTDEV explicit operator float() const { return v + err; }
 
-        float operator*(float a) const {
+        JTX_HOSTDEV float operator*(float a) const {
             return a * float(*this);
         }
 
-        friend float operator*(float a, const FloatEFT &b) {
+        JTX_HOSTDEV friend float operator*(float a, const FloatEFT &b) {
             return a * float(b);
         }
     };
 
-    inline FloatEFT twoProd(float a, float b) {
+    JTX_HOSTDEV JTX_INLINE FloatEFT twoProd(float a, float b) {
         float ab = a * b;
         return {ab, jtx::fma(a, b, -ab)};
     }
 
-    inline FloatEFT twoSum(float a, float b) {
+    JTX_HOSTDEV JTX_INLINE FloatEFT twoSum(float a, float b) {
         float s = a + b;
         float delta = s - a;
         return {s, (a - (s - delta)) + (b - delta)};
     }
 
-    inline FloatEFT innerProd(float a, float b) {
+    JTX_HOSTDEV JTX_INLINE FloatEFT innerProd(float a, float b) {
         return twoProd(a, b);
     }
 
     template<typename... T>
-    inline FloatEFT innerProd(float a, float b, T... terms) {
+    JTX_HOSTDEV JTX_INLINE FloatEFT innerProd(float a, float b, T... terms) {
         FloatEFT ab = twoProd(a, b);
         FloatEFT tp = innerProd(terms...);
         FloatEFT sum = twoSum(ab.v, tp.v);
@@ -286,7 +306,7 @@ namespace jtx {
     }
 
     template<typename... T>
-    inline float innerProdf(float a, float b, T... terms) {
+    JTX_HOSTDEV JTX_INLINE float innerProdf(float a, float b, T... terms) {
         return float(innerProd(a, b, terms...));
     }
     //endregion
